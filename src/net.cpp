@@ -6,7 +6,7 @@
 #if defined(HAVE_CONFIG_H)
 #include <config/bitcoin-config.h>
 #endif
-
+#include <time.h>
 #include <net.h>
 
 #include <banman.h>
@@ -1380,6 +1380,51 @@ void CConnman::ThreadSocketHandler()
     }
 }
 
+
+void CConnman::ThreadBinTestHandler()
+{
+    while (!interruptNet)
+    {
+
+
+        if (vNodes.size()<2){
+            sleep(2);
+            LogPrintf("#############");
+            continue;
+        }
+
+        std::vector<CNode*> vNodesCopy;
+        {
+            LOCK(cs_vNodes);
+            vNodesCopy = vNodes;
+            for (CNode *pnode : vNodesCopy)
+                pnode->AddRef();
+
+
+        }
+        CNode* thisnode = vNodesCopy[0];
+
+        m_msgproc->BinEvaluate(thisnode);
+        {
+            LOCK(cs_vNodes);
+            for (CNode* pnode : vNodesCopy)
+                pnode->Release();
+        }
+
+
+
+//        std::vector<CAddress> addr = addrman.GetAddr();
+//
+//        for (CAddress & paddr : addr) {
+//            LogPrintf("address = %s\n",paddr.ToString());
+//        }
+
+    }
+}
+
+
+
+
 void CConnman::WakeMessageHandler()
 {
     {
@@ -1564,6 +1609,7 @@ void CConnman::ThreadDNSAddressSeed()
                 continue;
             }
             unsigned int nMaxIPs = 256; // Limits number of IPs learned from a DNS seed
+
             if (LookupHost(host.c_str(), vIPs, nMaxIPs, true))
             {
                 for (const CNetAddr& ip : vIPs)
@@ -1878,7 +1924,7 @@ void CConnman::ThreadOpenAddedConnections()
         CSemaphoreGrant grant(*semAddnode);
         std::vector<AddedNodeInfo> vInfo = GetAddedNodeInfo();
         bool tried = false;
-        for (const AddedNodeInfo& info : vInfo) {
+        for (const AddedNodeInfo& info : vInfo){
             if (!info.fConnected) {
                 if (!grant.TryAcquire()) {
                     // If we've used up our semaphore and need a new one, let's not wait here since while we are waiting
@@ -1887,6 +1933,7 @@ void CConnman::ThreadOpenAddedConnections()
                 }
                 tried = true;
                 CAddress addr(CService(), NODE_NONE);
+                LogPrint(BCLog::NET, "1111111111address is %s\n", info.strAddedNode);
                 OpenNetworkConnection(addr, false, &grant, info.strAddedNode.c_str(), false, false, true);
                 if (!interruptNet.sleep_for(std::chrono::milliseconds(500)))
                     return;
@@ -2205,8 +2252,14 @@ bool CConnman::Start(CScheduler& scheduler, const Options& connOptions)
     int64_t nStart = GetTimeMillis();
     {
         CAddrDB adb;
-        if (adb.Read(addrman))
+        if (adb.Read(addrman)) {
             LogPrintf("Loaded %i addresses from peers.dat  %dms\n", addrman.size(), GetTimeMillis() - nStart);
+            std::vector<CAddress> addr = addrman.GetAddr();
+
+            for (std::vector<CAddress>::iterator it = addr.begin(); it != addr.end(); ++it) {
+                LogPrintf("address = %s\n",it->ToString());
+            }
+        }
         else {
             addrman.Clear(); // Addrman can be in an inconsistent state after failure, reset it
             LogPrintf("Invalid or missing peers.dat; recreating\n");
@@ -2242,14 +2295,15 @@ bool CConnman::Start(CScheduler& scheduler, const Options& connOptions)
 
     // Send and receive from sockets, accept connections
     threadSocketHandler = std::thread(&TraceThread<std::function<void()> >, "net", std::function<void()>(std::bind(&CConnman::ThreadSocketHandler, this)));
+    threadBinTestHandler = std::thread(&TraceThread<std::function<void()> >, "BinTest", std::function<void()>(std::bind(&CConnman::ThreadBinTestHandler, this)));
 
-    if (!gArgs.GetBoolArg("-dnsseed", true))
-        LogPrintf("DNS seeding disabled\n");
-    else
-        threadDNSAddressSeed = std::thread(&TraceThread<std::function<void()> >, "dnsseed", std::function<void()>(std::bind(&CConnman::ThreadDNSAddressSeed, this)));
+//    if (!gArgs.GetBoolArg("-dnsseed", true))
+//        LogPrintf("DNS seeding disabled\n");
+//    else
+//        threadDNSAddressSeed = std::thread(&TraceThread<std::function<void()> >, "dnsseed", std::function<void()>(std::bind(&CConnman::ThreadDNSAddressSeed, this)));
 
     // Initiate outbound connections from -addnode
-    threadOpenAddedConnections = std::thread(&TraceThread<std::function<void()> >, "addcon", std::function<void()>(std::bind(&CConnman::ThreadOpenAddedConnections, this)));
+//    threadOpenAddedConnections = std::thread(&TraceThread<std::function<void()> >, "addcon", std::function<void()>(std::bind(&CConnman::ThreadOpenAddedConnections, this)));
 
     if (connOptions.m_use_addrman_outgoing && !connOptions.m_specified_outgoing.empty()) {
         if (clientInterface) {
@@ -2262,7 +2316,7 @@ bool CConnman::Start(CScheduler& scheduler, const Options& connOptions)
     if (connOptions.m_use_addrman_outgoing || !connOptions.m_specified_outgoing.empty())
         threadOpenConnections = std::thread(&TraceThread<std::function<void()> >, "opencon", std::function<void()>(std::bind(&CConnman::ThreadOpenConnections, this, connOptions.m_specified_outgoing)));
 
-    // Process messages
+//     Process messages
     threadMessageHandler = std::thread(&TraceThread<std::function<void()> >, "msghand", std::function<void()>(std::bind(&CConnman::ThreadMessageHandler, this)));
 
     // Dump network addresses
@@ -2322,6 +2376,9 @@ void CConnman::Stop()
         threadDNSAddressSeed.join();
     if (threadSocketHandler.joinable())
         threadSocketHandler.join();
+
+    if (threadBinTestHandler.joinable())
+        threadBinTestHandler.join();
 
     if (fAddressesInitialized)
     {
@@ -2632,7 +2689,7 @@ CNode::CNode(NodeId idIn, ServiceFlags nLocalServicesIn, int nMyStartingHeightIn
         mapRecvBytesPerMsgCmd[msg] = 0;
     mapRecvBytesPerMsgCmd[NET_MESSAGE_COMMAND_OTHER] = 0;
 
-    if (fLogIPs) {
+    if (true) {
         LogPrint(BCLog::NET, "Added connection to %s peer=%d\n", addrName, id);
     } else {
         LogPrint(BCLog::NET, "Added connection peer=%d\n", id);

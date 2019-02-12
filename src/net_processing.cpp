@@ -621,6 +621,14 @@ void PeerLogicValidation::InitializeNode(CNode *pnode) {
         PushNodeVersion(pnode, connman, GetTime());
 }
 
+void PeerLogicValidation::BinEvaluate(CNode *pnode) {
+
+    PushNodeVersion(pnode, connman, GetTime());
+
+
+}
+
+
 void PeerLogicValidation::FinalizeNode(NodeId nodeid, bool& fUpdateConnectionTime) {
     fUpdateConnectionTime = false;
     LOCK(cs_main);

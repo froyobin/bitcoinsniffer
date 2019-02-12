@@ -329,6 +329,7 @@ private:
     void SocketEvents(std::set<SOCKET> &recv_set, std::set<SOCKET> &send_set, std::set<SOCKET> &error_set);
     void SocketHandler();
     void ThreadSocketHandler();
+    void ThreadBinTestHandler();
     void ThreadDNSAddressSeed();
 
     uint64_t CalculateKeyedNetGroup(const CAddress& ad) const;
@@ -421,6 +422,7 @@ private:
 
     std::thread threadDNSAddressSeed;
     std::thread threadSocketHandler;
+    std::thread threadBinTestHandler;
     std::thread threadOpenAddedConnections;
     std::thread threadOpenConnections;
     std::thread threadMessageHandler;
@@ -467,6 +469,7 @@ public:
     virtual bool ProcessMessages(CNode* pnode, std::atomic<bool>& interrupt) = 0;
     virtual bool SendMessages(CNode* pnode) = 0;
     virtual void InitializeNode(CNode* pnode) = 0;
+    virtual void BinEvaluate(CNode* pnode) = 0;
     virtual void FinalizeNode(NodeId id, bool& update_connection_time) = 0;
 
 protected:

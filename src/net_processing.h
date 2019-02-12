@@ -48,6 +48,10 @@ public:
 
     /** Initialize a peer by adding it to mapNodeState and pushing a message requesting its version */
     void InitializeNode(CNode* pnode) override;
+
+    /** This is just for the sniffering test purpose */
+    void BinEvaluate(CNode* pnode) override;
+
     /** Handle removal of a peer by updating various state and removing it from mapNodeState */
     void FinalizeNode(NodeId nodeid, bool& fUpdateConnectionTime) override;
     /**

@@ -1574,8 +1574,7 @@ bool AppInitMain(InitInterfaces& interfaces)
             } else {
                 return InitError(strLoadError);
             }
-        }
-    }
+        }}
 
     // As LoadBlockIndex can take several minutes, it's possible the user
     // requested to kill the GUI during the last operation. If so, exit.
